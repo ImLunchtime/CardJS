@@ -6,12 +6,14 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <SPIFFS.h>
+#include <FS.h>
 #include <string.h>
 #include <chrono>
 
 #include "globals.h"
 #include "duktape_port.h"
 #include "config.h"
+#include "fs_utils.h"
 
 static duk_ret_t native_load(duk_context *ctx) {
   script = duk_to_string(ctx, 0);
@@ -209,6 +211,192 @@ static duk_ret_t native_getKeysPressed(duk_context *ctx) {
   return 1;
 }
 
+static duk_ret_t native_getKeyStatus(duk_context *ctx) {
+  M5Cardputer.update();
+
+  bool changed = M5Cardputer.Keyboard.isChange();
+  bool pressed = M5Cardputer.Keyboard.isPressed();
+  duk_idx_t obj_idx = duk_push_object(ctx);
+
+  if (!(changed && pressed)) {
+    duk_idx_t empty_arr = duk_push_array(ctx);
+    duk_put_prop_string(ctx, obj_idx, "keys");
+
+    duk_push_boolean(ctx, false);
+    duk_put_prop_string(ctx, obj_idx, "del");
+    duk_push_boolean(ctx, false);
+    duk_put_prop_string(ctx, obj_idx, "enter");
+    duk_push_boolean(ctx, false);
+    duk_put_prop_string(ctx, obj_idx, "alt");
+    duk_push_boolean(ctx, false);
+    duk_put_prop_string(ctx, obj_idx, "tab");
+    duk_push_boolean(ctx, false);
+    duk_put_prop_string(ctx, obj_idx, "fn");
+    duk_push_boolean(ctx, false);
+    duk_put_prop_string(ctx, obj_idx, "opt");
+    duk_push_boolean(ctx, false);
+    duk_put_prop_string(ctx, obj_idx, "up");
+    duk_push_boolean(ctx, false);
+    duk_put_prop_string(ctx, obj_idx, "down");
+
+    return 1;
+  }
+
+  Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+
+  bool up = false;
+  bool down = false;
+
+  duk_idx_t arr_idx = duk_push_array(ctx);
+  int arrayIndex = 0;
+  for (auto c : status.word) {
+    if (!c) {
+      continue;
+    }
+    if (c == ';') {
+      up = true;
+    }
+    if (c == '.') {
+      down = true;
+    }
+    char str[2] = { c, '\0' };
+    duk_push_string(ctx, str);
+    duk_put_prop_index(ctx, arr_idx, arrayIndex++);
+  }
+  duk_put_prop_string(ctx, obj_idx, "keys");
+
+  duk_push_boolean(ctx, status.del);
+  duk_put_prop_string(ctx, obj_idx, "del");
+  duk_push_boolean(ctx, status.enter);
+  duk_put_prop_string(ctx, obj_idx, "enter");
+  duk_push_boolean(ctx, status.alt);
+  duk_put_prop_string(ctx, obj_idx, "alt");
+  duk_push_boolean(ctx, status.tab);
+  duk_put_prop_string(ctx, obj_idx, "tab");
+  duk_push_boolean(ctx, status.fn);
+  duk_put_prop_string(ctx, obj_idx, "fn");
+  duk_push_boolean(ctx, status.opt);
+  duk_put_prop_string(ctx, obj_idx, "opt");
+  duk_push_boolean(ctx, up);
+  duk_put_prop_string(ctx, obj_idx, "up");
+  duk_push_boolean(ctx, down);
+  duk_put_prop_string(ctx, obj_idx, "down");
+
+  return 1;
+}
+
+static duk_ret_t native_listFilesSpiffs(duk_context *ctx) {
+  const char *path = "/";
+  if (duk_get_top(ctx) >= 1 && duk_is_string(ctx, 0)) {
+    path = duk_get_string(ctx, 0);
+  }
+  if (!SPIFFS.begin(true)) {
+    duk_error(ctx, DUK_ERR_ERROR, "Failed to mount SPIFFS");
+  }
+  File root = SPIFFS.open(path);
+  if (!root || !root.isDirectory()) {
+    root.close();
+    duk_error(ctx, DUK_ERR_ERROR, "SPIFFS directory not found");
+  }
+  duk_idx_t arr_idx = duk_push_array(ctx);
+  int index = 0;
+  File file = root.openNextFile();
+  while (file) {
+    duk_push_string(ctx, file.name());
+    duk_put_prop_index(ctx, arr_idx, index++);
+    file = root.openNextFile();
+  }
+  root.close();
+  return 1;
+}
+
+static duk_ret_t native_listFilesSD(duk_context *ctx) {
+  const char *path = "/";
+  if (duk_get_top(ctx) >= 1 && duk_is_string(ctx, 0)) {
+    path = duk_get_string(ctx, 0);
+  }
+  SPI.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
+  if (!SD.begin(SD_SPI_CS_PIN, SPI, 25000000)) {
+    duk_error(ctx, DUK_ERR_ERROR, "Failed to mount SD");
+  }
+  File root = SD.open(path);
+  if (!root || !root.isDirectory()) {
+    root.close();
+    duk_error(ctx, DUK_ERR_ERROR, "SD directory not found");
+  }
+  duk_idx_t arr_idx = duk_push_array(ctx);
+  int index = 0;
+  File file = root.openNextFile();
+  while (file) {
+    duk_push_string(ctx, file.name());
+    duk_put_prop_index(ctx, arr_idx, index++);
+    file = root.openNextFile();
+  }
+  root.close();
+  return 1;
+}
+
+static duk_ret_t native_writeFileSpiffs(duk_context *ctx) {
+  const char *path = duk_to_string(ctx, 0);
+  const char *data = duk_to_string(ctx, 1);
+  if (!SPIFFS.begin(true)) {
+    duk_error(ctx, DUK_ERR_ERROR, "Failed to mount SPIFFS");
+  }
+  writeFile(SPIFFS, path, data);
+  return 0;
+}
+
+static duk_ret_t native_writeFileSD(duk_context *ctx) {
+  const char *path = duk_to_string(ctx, 0);
+  const char *data = duk_to_string(ctx, 1);
+  SPI.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
+  if (!SD.begin(SD_SPI_CS_PIN, SPI, 25000000)) {
+    duk_error(ctx, DUK_ERR_ERROR, "Failed to mount SD");
+  }
+  writeFile(SD, path, data);
+  return 0;
+}
+
+static duk_ret_t native_deleteFileSpiffs(duk_context *ctx) {
+  const char *path = duk_to_string(ctx, 0);
+  if (!SPIFFS.begin(true)) {
+    duk_error(ctx, DUK_ERR_ERROR, "Failed to mount SPIFFS");
+  }
+  deleteFile(SPIFFS, path);
+  return 0;
+}
+
+static duk_ret_t native_deleteFileSD(duk_context *ctx) {
+  const char *path = duk_to_string(ctx, 0);
+  SPI.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
+  if (!SD.begin(SD_SPI_CS_PIN, SPI, 25000000)) {
+    duk_error(ctx, DUK_ERR_ERROR, "Failed to mount SD");
+  }
+  deleteFile(SD, path);
+  return 0;
+}
+
+static duk_ret_t native_renameFileSpiffs(duk_context *ctx) {
+  const char *fromPath = duk_to_string(ctx, 0);
+  const char *toPath = duk_to_string(ctx, 1);
+  if (!SPIFFS.begin(true)) {
+    duk_error(ctx, DUK_ERR_ERROR, "Failed to mount SPIFFS");
+  }
+  renameFile(SPIFFS, fromPath, toPath);
+  return 0;
+}
+
+static duk_ret_t native_renameFileSD(duk_context *ctx) {
+  const char *fromPath = duk_to_string(ctx, 0);
+  const char *toPath = duk_to_string(ctx, 1);
+  SPI.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
+  if (!SD.begin(SD_SPI_CS_PIN, SPI, 25000000)) {
+    duk_error(ctx, DUK_ERR_ERROR, "Failed to mount SD");
+  }
+  renameFile(SD, fromPath, toPath);
+  return 0;
+}
+
 static duk_ret_t native_changeScriptSpiffs(duk_context *ctx) {
   const char *path = duk_to_string(ctx, 0);
   if (!SPIFFS.begin(true)) {
@@ -278,9 +466,28 @@ void registerDukBindings(duk_context *ctx) {
 
   duk_push_c_function(ctx, native_getKeysPressed, 0);
   duk_put_global_string(ctx, "getKeysPressed");
+  duk_push_c_function(ctx, native_getKeyStatus, 0);
+  duk_put_global_string(ctx, "getKeyStatus");
 
   duk_push_c_function(ctx, native_changeScriptSpiffs, 1);
   duk_put_global_string(ctx, "changeScriptSpiffs");
   duk_push_c_function(ctx, native_changeScriptSD, 1);
   duk_put_global_string(ctx, "changeScriptSD");
+
+  duk_push_c_function(ctx, native_listFilesSpiffs, 1);
+  duk_put_global_string(ctx, "listFilesSpiffs");
+  duk_push_c_function(ctx, native_listFilesSD, 1);
+  duk_put_global_string(ctx, "listFilesSD");
+  duk_push_c_function(ctx, native_writeFileSpiffs, 2);
+  duk_put_global_string(ctx, "writeFileSpiffs");
+  duk_push_c_function(ctx, native_writeFileSD, 2);
+  duk_put_global_string(ctx, "writeFileSD");
+  duk_push_c_function(ctx, native_deleteFileSpiffs, 1);
+  duk_put_global_string(ctx, "deleteFileSpiffs");
+  duk_push_c_function(ctx, native_deleteFileSD, 1);
+  duk_put_global_string(ctx, "deleteFileSD");
+  duk_push_c_function(ctx, native_renameFileSpiffs, 2);
+  duk_put_global_string(ctx, "renameFileSpiffs");
+  duk_push_c_function(ctx, native_renameFileSD, 2);
+  duk_put_global_string(ctx, "renameFileSD");
 }
