@@ -5,11 +5,13 @@
 #include <SD.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <SPIFFS.h>
 #include <string.h>
 #include <chrono>
 
 #include "globals.h"
 #include "duktape_port.h"
+#include "config.h"
 
 static duk_ret_t native_load(duk_context *ctx) {
   script = duk_to_string(ctx, 0);
@@ -207,6 +209,39 @@ static duk_ret_t native_getKeysPressed(duk_context *ctx) {
   return 1;
 }
 
+static duk_ret_t native_changeScriptSpiffs(duk_context *ctx) {
+  const char *path = duk_to_string(ctx, 0);
+  if (!SPIFFS.begin(true)) {
+    duk_error(ctx, DUK_ERR_ERROR, "Failed to mount SPIFFS");
+  }
+  File file = SPIFFS.open(path, "r");
+  if (!file) {
+    duk_error(ctx, DUK_ERR_ERROR, "SPIFFS script not found");
+  }
+  file.close();
+  pendingScriptPath = String(path);
+  pendingScriptIsSpiffs = true;
+  pendingScriptChange = true;
+  return 0;
+}
+
+static duk_ret_t native_changeScriptSD(duk_context *ctx) {
+  const char *path = duk_to_string(ctx, 0);
+  SPI.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
+  if (!SD.begin(SD_SPI_CS_PIN, SPI, 25000000)) {
+    duk_error(ctx, DUK_ERR_ERROR, "Failed to mount SD");
+  }
+  File file = SD.open(path, "r");
+  if (!file) {
+    duk_error(ctx, DUK_ERR_ERROR, "SD script not found");
+  }
+  file.close();
+  pendingScriptPath = String(path);
+  pendingScriptIsSpiffs = false;
+  pendingScriptChange = true;
+  return 0;
+}
+
 void registerDukBindings(duk_context *ctx) {
   duk_push_c_function(ctx, native_load, 1);
   duk_put_global_string(ctx, "load");
@@ -243,5 +278,9 @@ void registerDukBindings(duk_context *ctx) {
 
   duk_push_c_function(ctx, native_getKeysPressed, 0);
   duk_put_global_string(ctx, "getKeysPressed");
-}
 
+  duk_push_c_function(ctx, native_changeScriptSpiffs, 1);
+  duk_put_global_string(ctx, "changeScriptSpiffs");
+  duk_push_c_function(ctx, native_changeScriptSD, 1);
+  duk_put_global_string(ctx, "changeScriptSD");
+}
