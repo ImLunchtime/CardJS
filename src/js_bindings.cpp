@@ -346,6 +346,25 @@ static duk_ret_t native_writeFileSpiffs(duk_context *ctx) {
   return 0;
 }
 
+static duk_ret_t native_readFileSpiffs(duk_context *ctx) {
+  const char *path = duk_to_string(ctx, 0);
+  if (!SPIFFS.begin(true)) {
+    duk_error(ctx, DUK_ERR_ERROR, "Failed to mount SPIFFS");
+  }
+  File file = SPIFFS.open(path, "r");
+  if (!file) {
+    duk_push_string(ctx, "");
+    return 1;
+  }
+  String s;
+  while (file.available()) {
+    s += (char)file.read();
+  }
+  file.close();
+  duk_push_string(ctx, s.c_str());
+  return 1;
+}
+
 static duk_ret_t native_writeFileSD(duk_context *ctx) {
   const char *path = duk_to_string(ctx, 0);
   const char *data = duk_to_string(ctx, 1);
@@ -355,6 +374,26 @@ static duk_ret_t native_writeFileSD(duk_context *ctx) {
   }
   writeFile(SD, path, data);
   return 0;
+}
+
+static duk_ret_t native_readFileSD(duk_context *ctx) {
+  const char *path = duk_to_string(ctx, 0);
+  SPI.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
+  if (!SD.begin(SD_SPI_CS_PIN, SPI, 25000000)) {
+    duk_error(ctx, DUK_ERR_ERROR, "Failed to mount SD");
+  }
+  File file = SD.open(path, "r");
+  if (!file) {
+    duk_push_string(ctx, "");
+    return 1;
+  }
+  String s;
+  while (file.available()) {
+    s += (char)file.read();
+  }
+  file.close();
+  duk_push_string(ctx, s.c_str());
+  return 1;
 }
 
 static duk_ret_t native_deleteFileSpiffs(duk_context *ctx) {
@@ -482,6 +521,10 @@ void registerDukBindings(duk_context *ctx) {
   duk_put_global_string(ctx, "writeFileSpiffs");
   duk_push_c_function(ctx, native_writeFileSD, 2);
   duk_put_global_string(ctx, "writeFileSD");
+  duk_push_c_function(ctx, native_readFileSpiffs, 1);
+  duk_put_global_string(ctx, "readFileSpiffs");
+  duk_push_c_function(ctx, native_readFileSD, 1);
+  duk_put_global_string(ctx, "readFileSD");
   duk_push_c_function(ctx, native_deleteFileSpiffs, 1);
   duk_put_global_string(ctx, "deleteFileSpiffs");
   duk_push_c_function(ctx, native_deleteFileSD, 1);
