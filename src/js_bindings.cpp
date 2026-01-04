@@ -133,6 +133,54 @@ static duk_ret_t native_Menu_update(duk_context *ctx) {
   return 0;
 }
 
+static duk_ret_t native_Menu_setItemCallback(duk_context *ctx) {
+  NativeMenu *menu = get_native_menu(ctx);
+  if (!menu) {
+    return 0;
+  }
+  int index = duk_to_int(ctx, 0);
+  if (!duk_is_function(ctx, 1)) {
+    return 0;
+  }
+
+  duk_push_this(ctx);
+  duk_get_prop_string(ctx, -1, "_callbacks");
+  if (!duk_is_array(ctx, -1)) {
+    duk_pop(ctx);
+    duk_push_array(ctx);
+    duk_dup(ctx, -1);
+    duk_put_prop_string(ctx, -3, "_callbacks");
+  }
+  duk_idx_t arr_idx = duk_get_top(ctx) - 1;
+  duk_uarridx_t idx = duk_get_length(ctx, arr_idx);
+  duk_dup(ctx, 1);
+  duk_put_prop_index(ctx, arr_idx, idx);
+  duk_get_prop_index(ctx, arr_idx, idx);
+  void *callbackPtr = duk_get_heapptr(ctx, -1);
+  duk_pop_3(ctx);
+
+  menu->setItemCallback(index, callbackPtr);
+  return 0;
+}
+
+static duk_ret_t native_Menu_open(duk_context *ctx) {
+  NativeMenu *menu = get_native_menu(ctx);
+  if (!menu) {
+    return 0;
+  }
+  menu->open();
+  return 0;
+}
+
+static duk_ret_t native_Menu_close(duk_context *ctx) {
+  NativeMenu *menu = get_native_menu(ctx);
+  if (!menu) {
+    return 0;
+  }
+  menu->close();
+  return 0;
+}
+
 static duk_ret_t native_Menu(duk_context *ctx) {
   duk_idx_t obj_idx = duk_push_object(ctx);
   NativeMenu *menu = new NativeMenu();
@@ -154,6 +202,12 @@ static duk_ret_t native_Menu(duk_context *ctx) {
   duk_put_prop_string(ctx, obj_idx, "refresh");
   duk_push_c_function(ctx, native_Menu_update, 0);
   duk_put_prop_string(ctx, obj_idx, "update");
+  duk_push_c_function(ctx, native_Menu_setItemCallback, 2);
+  duk_put_prop_string(ctx, obj_idx, "setItemCallback");
+  duk_push_c_function(ctx, native_Menu_open, 0);
+  duk_put_prop_string(ctx, obj_idx, "open");
+  duk_push_c_function(ctx, native_Menu_close, 0);
+  duk_put_prop_string(ctx, obj_idx, "close");
   return 1;
 }
 
@@ -380,6 +434,8 @@ static duk_ret_t native_getKeyStatus(duk_context *ctx) {
     duk_put_prop_string(ctx, obj_idx, "up");
     duk_push_boolean(ctx, false);
     duk_put_prop_string(ctx, obj_idx, "down");
+    duk_push_boolean(ctx, false);
+    duk_put_prop_string(ctx, obj_idx, "esc");
 
     return 1;
   }
@@ -388,6 +444,7 @@ static duk_ret_t native_getKeyStatus(duk_context *ctx) {
 
   bool up = false;
   bool down = false;
+   bool esc = false;
 
   duk_idx_t arr_idx = duk_push_array(ctx);
   int arrayIndex = 0;
@@ -400,6 +457,9 @@ static duk_ret_t native_getKeyStatus(duk_context *ctx) {
     }
     if (c == '.') {
       down = true;
+    }
+    if (c == '`') {
+      esc = true;
     }
     char str[2] = { c, '\0' };
     duk_push_string(ctx, str);
@@ -423,6 +483,8 @@ static duk_ret_t native_getKeyStatus(duk_context *ctx) {
   duk_put_prop_string(ctx, obj_idx, "up");
   duk_push_boolean(ctx, down);
   duk_put_prop_string(ctx, obj_idx, "down");
+  duk_push_boolean(ctx, esc);
+  duk_put_prop_string(ctx, obj_idx, "esc");
 
   return 1;
 }

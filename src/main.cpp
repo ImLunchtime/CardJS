@@ -106,6 +106,9 @@ void setup() {
   auto cfg = M5.config();
   M5Cardputer.begin(cfg, true);
 
+  pinMode(GPIO_NUM_5, OUTPUT);
+  digitalWrite(GPIO_NUM_5, HIGH);
+
   loadConfigFile(ssid,password);
   WiFi.begin(ssid, password);
 

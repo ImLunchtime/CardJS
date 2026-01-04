@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <Arduino.h>
 #include <vector>
@@ -29,7 +29,7 @@ struct NativeMenuItem {
   void *callbackFunc;
 };
 
- class NativeMenu {
+class NativeMenu {
  public:
   NativeMenu();
   void addButton(const char *label, void *callbackFunc);
@@ -39,11 +39,16 @@ struct NativeMenuItem {
   void addBool(const char *label, bool defaultValue, const char *trueText, const char *falseText);
   void refresh();
   void update(duk_context *ctx);
+  void setItemCallback(int index, void *callbackFunc);
+  void open();
+  void close();
+  bool isActive() const;
 
  private:
   std::vector<NativeMenuItem> items;
   int selectedIndex;
   int scrollOffset;
+  bool active;
   bool needsInitialDraw;
   bool editing;
   int editingIndex;

@@ -6,6 +6,7 @@
 NativeMenu::NativeMenu()
     : selectedIndex(0),
       scrollOffset(0),
+      active(true),
       needsInitialDraw(true),
       editing(false),
       editingIndex(-1),
@@ -139,6 +140,35 @@ void NativeMenu::ensureSelectionVisible() {
   }
 }
 
+void NativeMenu::setItemCallback(int index, void *callbackFunc) {
+  if (index < 0 || index >= (int)items.size()) {
+    return;
+  }
+  items[index].callbackFunc = callbackFunc;
+}
+
+void NativeMenu::open() {
+  if (active) {
+    return;
+  }
+  active = true;
+  needsInitialDraw = true;
+}
+
+void NativeMenu::close() {
+  if (!active) {
+    return;
+  }
+  active = false;
+  int width = M5Cardputer.Display.width();
+  int height = M5Cardputer.Display.height();
+  M5Cardputer.Display.fillRect(0, 0, width, height, BLACK);
+}
+
+bool NativeMenu::isActive() const {
+  return active;
+}
+
 void NativeMenu::drawItem(const NativeMenuItem &item, int index, int y, int itemHeight, bool selected) {
   int width = M5Cardputer.Display.width();
   uint16_t bg = selected ? itemHighlightColor : itemColor;
@@ -221,6 +251,10 @@ void NativeMenu::update(duk_context *ctx) {
     return;
   }
 
+  if (!active) {
+    return;
+  }
+
   if (needsInitialDraw) {
     refresh();
     return;
@@ -270,9 +304,31 @@ void NativeMenu::update(duk_context *ctx) {
           if (v > item.numberMax) {
             v = item.numberMax;
           }
-          item.numberValue = v;
+          if (v != item.numberValue) {
+            item.numberValue = v;
+            if (item.callbackFunc) {
+              duk_push_heapptr(ctx, item.callbackFunc);
+              duk_push_int(ctx, item.numberValue);
+              if (duk_pcall(ctx, 1) != 0) {
+                duk_pop(ctx);
+              } else {
+                duk_pop(ctx);
+              }
+            }
+          }
         } else {
-          item.stringValue = editBuffer;
+          if (item.stringValue != editBuffer) {
+            item.stringValue = editBuffer;
+            if (item.callbackFunc) {
+              duk_push_heapptr(ctx, item.callbackFunc);
+              duk_push_string(ctx, item.stringValue.c_str());
+              if (duk_pcall(ctx, 1) != 0) {
+                duk_pop(ctx);
+              } else {
+                duk_pop(ctx);
+              }
+            }
+          }
         }
       }
       editBuffer = "";
@@ -357,6 +413,15 @@ void NativeMenu::update(duk_context *ctx) {
         if (v != item.numberValue) {
           item.numberValue = v;
           didChange = true;
+          if (item.callbackFunc) {
+            duk_push_heapptr(ctx, item.callbackFunc);
+            duk_push_int(ctx, item.numberValue);
+            if (duk_pcall(ctx, 1) != 0) {
+              duk_pop(ctx);
+            } else {
+              duk_pop(ctx);
+            }
+          }
         }
       }
     } else if (item.type == MENU_ITEM_STRING) {
@@ -381,12 +446,33 @@ void NativeMenu::update(duk_context *ctx) {
         if (idx != item.selectionIndex) {
           item.selectionIndex = idx;
           didChange = true;
+          if (item.callbackFunc && !item.options.empty() &&
+              item.selectionIndex >= 0 &&
+              item.selectionIndex < (int)item.options.size()) {
+            duk_push_heapptr(ctx, item.callbackFunc);
+            duk_push_int(ctx, item.selectionIndex);
+            duk_push_string(ctx, item.options[item.selectionIndex].c_str());
+            if (duk_pcall(ctx, 2) != 0) {
+              duk_pop(ctx);
+            } else {
+              duk_pop(ctx);
+            }
+          }
         }
       }
     } else if (item.type == MENU_ITEM_BOOL) {
       if (left || right || enter) {
         item.boolValue = !item.boolValue;
         didChange = true;
+        if (item.callbackFunc) {
+          duk_push_heapptr(ctx, item.callbackFunc);
+          duk_push_boolean(ctx, item.boolValue);
+          if (duk_pcall(ctx, 1) != 0) {
+            duk_pop(ctx);
+          } else {
+            duk_pop(ctx);
+          }
+        }
       }
     }
   }

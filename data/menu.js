@@ -2,19 +2,29 @@ var files = [];
 var selectedIndex = 0;
 var lastKeyTime = 0;
 var debounceDelay = 200;
+var useSd = false;
 
 function loadFiles() {
     files = [];
-    var all = listFilesSpiffs("/");
+    var all;
+    if (useSd) {
+        all = listFilesSD("/");
+    } else {
+        all = listFilesSpiffs("/");
+    }
     for (var i = 0; i < all.length; i++) {
         var name = all[i];
-        if (name.length < 4) {
+        var base = name;
+        if (base.charAt(0) === "/") {
+            base = base.substring(1);
+        }
+        if (base.length < 4) {
             continue;
         }
-        if (name.substr(name.length - 3) !== ".js") {
+        if (base.substr(base.length - 3) !== ".js") {
             continue;
         }
-        if (name === "/boot.js" || name === "/menu.js") {
+        if (base === "boot.js" || base === "menu.js") {
             continue;
         }
         files.push(name);
@@ -31,12 +41,16 @@ function drawMenu() {
     setTextSize(2);
     setTextColor(fg);
 
+    var storageLabel = useSd ? "SD" : "SPIFFS";
     if (files.length === 0) {
-        drawString("No scripts found", 10, 10);
+        drawString("No scripts in " + storageLabel, 10, 10);
+        setTextSize(1);
+        drawString("[Tab] Change Storage SPIFFS/SD", 10, height() - 12);
         return;
     }
-
-    drawString("Select script:", 10, 10);
+    setTextSize(1);
+    drawString("Reading from " + storageLabel + ":", 10, 10);
+    setTextSize(2);
 
     var startY = 30;
     var lineHeight = 16;
@@ -48,6 +62,8 @@ function drawMenu() {
         var prefix = (i === selectedIndex) ? "> " : "  ";
         drawString(prefix + display, 10, startY + i * lineHeight);
     }
+    setTextSize(1);
+    drawString("[Tab] Change Storage SPIFFS/SD", 10, height() - 12);
 }
 
 function hasKey(keys, key) {
@@ -71,12 +87,17 @@ function loop() {
     }
 
     var state = getKeyStatus();
-    if (!state.up && !state.down && !state.enter) {
+    if (!state.up && !state.down && !state.enter && !state.tab) {
         return;
     }
     var changed = false;
 
-    if (files.length > 0) {
+    if (state.tab) {
+        useSd = !useSd;
+        loadFiles();
+        selectedIndex = 0;
+        changed = true;
+    } else if (files.length > 0) {
         if (state.up) {
             selectedIndex = (selectedIndex - 1 + files.length) % files.length;
             changed = true;
@@ -84,7 +105,11 @@ function loop() {
             selectedIndex = (selectedIndex + 1) % files.length;
             changed = true;
         } else if (state.enter) {
-            changeScriptSpiffs("/" + files[selectedIndex]);
+            if (useSd) {
+                changeScriptSD("/" + files[selectedIndex]);
+            } else {
+                changeScriptSpiffs("/" + files[selectedIndex]);
+            }
             lastKeyTime = currentTime;
             return;
         }

@@ -13,21 +13,27 @@ var charWidth = 12;
 var textStartY = 30;
 var marginX = 4;
 var firstVisibleCol = 0;
+var useSd = true;
 
-function loadSpiffsJsFiles() {
+function loadJsFiles() {
     files = [];
-    var all = listFilesSpiffs("/");
+    var all;
+    if (useSd) {
+        all = listFilesSD("/");
+    } else {
+        all = listFilesSpiffs("/");
+    }
     for (var i = 0; i < all.length; i++) {
         var name = all[i];
-        if (name.length < 4) {
-            continue;
-        }
-        if (name.substr(name.length - 3) !== ".js") {
-            continue;
-        }
         var base = name;
         if (base.charAt(0) === "/") {
             base = base.substring(1);
+        }
+        if (base.length < 4) {
+            continue;
+        }
+        if (base.substr(base.length - 3) !== ".js") {
+            continue;
         }
         if (base === "boot.js" || base === "menu.js") {
             continue;
@@ -43,7 +49,8 @@ function drawFileList() {
     drawFillRect(0, 0, width(), height(), bg);
     setTextSize(2);
     setTextColor(fg);
-    drawString("JS Editor", marginX, 4);
+    var storageLabel = useSd ? "SD" : "SPIFFS";
+    drawString("JS Editor (" + storageLabel + ")", marginX, 4);
     var items = ["New File"];
     for (var i = 0; i < files.length; i++) {
         var display = files[i];
@@ -57,6 +64,8 @@ function drawFileList() {
         var prefix = (j === selectedIndex) ? "> " : "  ";
         drawString(prefix + items[j], marginX, startY + j * lineHeight);
     }
+    setTextSize(1);
+    drawString("[Tab] Change Storage SPIFFS/SD", marginX, height() - 12);
 }
 
 function ensureCursorVisible() {
@@ -184,7 +193,12 @@ function joinLinesToText() {
 
 function loadFileToEditor(path) {
     currentPath = path;
-    var content = readFileSpiffs(path);
+    var content;
+    if (useSd) {
+        content = readFileSD(path);
+    } else {
+        content = readFileSpiffs(path);
+    }
     lines = splitTextToLines(content);
     if (lines.length === 0) {
         lines.push("");
@@ -199,7 +213,11 @@ function loadFileToEditor(path) {
 
 function saveCurrentFile() {
     var text = joinLinesToText();
-    writeFileSpiffs(currentPath, text);
+    if (useSd) {
+        writeFileSD(currentPath, text);
+    } else {
+        writeFileSpiffs(currentPath, text);
+    }
 }
 
 function moveCursorLeft() {
@@ -313,6 +331,13 @@ function parseArrowFromState(state) {
 function handleFileListInput(state) {
     var arrows = parseArrowFromState(state);
     var itemCount = files.length + 1;
+    if (state.tab && !state.fn) {
+        useSd = !useSd;
+        loadJsFiles();
+        selectedIndex = 0;
+        drawFileList();
+        return;
+    }
     if (arrows.up) {
         selectedIndex = (selectedIndex - 1 + itemCount) % itemCount;
         drawFileList();
@@ -359,8 +384,12 @@ function handleNameInput(state) {
             filename = "/" + filename;
         }
         currentPath = filename;
-        writeFileSpiffs(currentPath, "");
-        loadSpiffsJsFiles();
+        if (useSd) {
+            writeFileSD(currentPath, "");
+        } else {
+            writeFileSpiffs(currentPath, "");
+        }
+        loadJsFiles();
         editorState = "editor";
         lines = [""];
         cursorRow = 0;
@@ -402,7 +431,7 @@ function handleEditorInput(state) {
     } else if (state.enter && state.fn) {
         saveCurrentFile();
         editorState = "fileList";
-        loadSpiffsJsFiles();
+        loadJsFiles();
         selectedIndex = 0;
         drawFileList();
         return;
@@ -421,7 +450,7 @@ function handleEditorInput(state) {
 }
 
 function setup() {
-    loadSpiffsJsFiles();
+    loadJsFiles();
     editorState = "fileList";
     selectedIndex = 0;
     drawFileList();
