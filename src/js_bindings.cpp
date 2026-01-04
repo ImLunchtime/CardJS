@@ -9,11 +9,153 @@
 #include <FS.h>
 #include <string.h>
 #include <chrono>
+#include <vector>
 
 #include "globals.h"
 #include "duktape_port.h"
 #include "config.h"
 #include "fs_utils.h"
+#include "native_menu.h"
+
+static NativeMenu *get_native_menu(duk_context *ctx) {
+  duk_push_this(ctx);
+  duk_get_prop_string(ctx, -1, "\xffptr");
+  NativeMenu *menu = static_cast<NativeMenu *>(duk_get_pointer(ctx, -1));
+  duk_pop_2(ctx);
+  return menu;
+}
+
+static duk_ret_t native_Menu_addButtonItem(duk_context *ctx) {
+  NativeMenu *menu = get_native_menu(ctx);
+  if (!menu) {
+    return 0;
+  }
+  const char *label = duk_to_string(ctx, 0);
+
+  void *callbackPtr = nullptr;
+  if (duk_get_top(ctx) >= 2 && duk_is_function(ctx, 1)) {
+    duk_push_this(ctx);
+    duk_get_prop_string(ctx, -1, "_callbacks");
+    if (!duk_is_array(ctx, -1)) {
+      duk_pop(ctx);
+      duk_push_array(ctx);
+      duk_dup(ctx, -1);
+      duk_put_prop_string(ctx, -3, "_callbacks");
+    }
+    duk_idx_t arr_idx = duk_get_top(ctx) - 1;
+    duk_uarridx_t idx = duk_get_length(ctx, arr_idx);
+    duk_dup(ctx, 1);
+    duk_put_prop_index(ctx, arr_idx, idx);
+    duk_get_prop_index(ctx, arr_idx, idx);
+    callbackPtr = duk_get_heapptr(ctx, -1);
+    duk_pop_3(ctx);
+  }
+
+  menu->addButton(label, callbackPtr);
+  return 0;
+}
+
+static duk_ret_t native_Menu_addNumberItem(duk_context *ctx) {
+  NativeMenu *menu = get_native_menu(ctx);
+  if (!menu) {
+    return 0;
+  }
+  const char *label = duk_to_string(ctx, 0);
+  int defaultValue = duk_to_int(ctx, 1);
+  int minVal = duk_to_int(ctx, 2);
+  int maxVal = duk_to_int(ctx, 3);
+  menu->addNumber(label, defaultValue, minVal, maxVal);
+  return 0;
+}
+
+static duk_ret_t native_Menu_addStringItem(duk_context *ctx) {
+  NativeMenu *menu = get_native_menu(ctx);
+  if (!menu) {
+    return 0;
+  }
+  const char *label = duk_to_string(ctx, 0);
+  int maxLen = duk_to_int(ctx, 1);
+  const char *defaultValue = duk_to_string(ctx, 2);
+  menu->addString(label, defaultValue, maxLen);
+  return 0;
+}
+
+static duk_ret_t native_Menu_addSelectionItem(duk_context *ctx) {
+  NativeMenu *menu = get_native_menu(ctx);
+  if (!menu) {
+    return 0;
+  }
+  const char *label = duk_to_string(ctx, 0);
+  std::vector<String> options;
+  if (duk_is_array(ctx, 1)) {
+    duk_uarridx_t len = duk_get_length(ctx, 1);
+    for (duk_uarridx_t i = 0; i < len; ++i) {
+      duk_get_prop_index(ctx, 1, i);
+      if (duk_is_string(ctx, -1)) {
+        options.push_back(String(duk_get_string(ctx, -1)));
+      }
+      duk_pop(ctx);
+    }
+  }
+  int defaultIndex = duk_to_int(ctx, 2);
+  menu->addSelection(label, options, defaultIndex);
+  return 0;
+}
+
+static duk_ret_t native_Menu_addBoolItem(duk_context *ctx) {
+  NativeMenu *menu = get_native_menu(ctx);
+  if (!menu) {
+    return 0;
+  }
+  const char *label = duk_to_string(ctx, 0);
+  bool defaultValue = duk_to_boolean(ctx, 1);
+  const char *trueTextValue = duk_to_string(ctx, 2);
+  const char *falseTextValue = duk_to_string(ctx, 3);
+  menu->addBool(label, defaultValue, trueTextValue, falseTextValue);
+  return 0;
+}
+
+static duk_ret_t native_Menu_refresh(duk_context *ctx) {
+  NativeMenu *menu = get_native_menu(ctx);
+  if (!menu) {
+    return 0;
+  }
+  menu->refresh();
+  return 0;
+}
+
+static duk_ret_t native_Menu_update(duk_context *ctx) {
+  NativeMenu *menu = get_native_menu(ctx);
+  if (!menu) {
+    return 0;
+  }
+  menu->update(ctx);
+  return 0;
+}
+
+static duk_ret_t native_Menu(duk_context *ctx) {
+  duk_idx_t obj_idx = duk_push_object(ctx);
+  NativeMenu *menu = new NativeMenu();
+  duk_push_pointer(ctx, menu);
+  duk_put_prop_string(ctx, obj_idx, "\xffptr");
+  duk_push_array(ctx);
+  duk_put_prop_string(ctx, obj_idx, "_callbacks");
+  duk_push_c_function(ctx, native_Menu_addButtonItem, 2);
+  duk_put_prop_string(ctx, obj_idx, "addButtonItem");
+  duk_push_c_function(ctx, native_Menu_addNumberItem, 4);
+  duk_put_prop_string(ctx, obj_idx, "addNumberItem");
+  duk_push_c_function(ctx, native_Menu_addStringItem, 3);
+  duk_put_prop_string(ctx, obj_idx, "addStringItem");
+  duk_push_c_function(ctx, native_Menu_addSelectionItem, 3);
+  duk_put_prop_string(ctx, obj_idx, "addSelectionItem");
+  duk_push_c_function(ctx, native_Menu_addBoolItem, 4);
+  duk_put_prop_string(ctx, obj_idx, "addBoolItem");
+  duk_push_c_function(ctx, native_Menu_refresh, 0);
+  duk_put_prop_string(ctx, obj_idx, "refresh");
+  duk_push_c_function(ctx, native_Menu_update, 0);
+  duk_put_prop_string(ctx, obj_idx, "update");
+  return 1;
+}
 
 static duk_ret_t native_load(duk_context *ctx) {
   script = duk_to_string(ctx, 0);
@@ -533,4 +675,7 @@ void registerDukBindings(duk_context *ctx) {
   duk_put_global_string(ctx, "renameFileSpiffs");
   duk_push_c_function(ctx, native_renameFileSD, 2);
   duk_put_global_string(ctx, "renameFileSD");
+
+  duk_push_c_function(ctx, native_Menu, 0);
+  duk_put_global_string(ctx, "Menu");
 }
