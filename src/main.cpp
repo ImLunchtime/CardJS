@@ -12,6 +12,23 @@
 #include "js_bindings.h"
 #include "duktape_port.h"
 
+static duk_context *ctx = nullptr;
+
+static void callJsFunction(const char *name) {
+  if (!ctx) {
+    return;
+  }
+  duk_get_global_string(ctx, name);
+  if (!duk_is_function(ctx, -1)) {
+    duk_pop(ctx);
+    return;
+  }
+  if (duk_pcall(ctx, 0) != 0) {
+    printf("%s error: %s\n", name, duk_safe_to_string(ctx, -1));
+  }
+  duk_pop(ctx);
+}
+
 void setup() {
   Serial.begin(9600);
 
@@ -23,29 +40,28 @@ void setup() {
   loadConfigFile(ssid,password);
   WiFi.begin(ssid, password);
 
-  script = readBootFile();
-}
+  ctx = duk_create_heap_default();
+  registerDukBindings(ctx);
 
-void loop() {
   M5Cardputer.Display.fillRect(0,0,M5Cardputer.Display.width(),M5Cardputer.Display.height(),BLACK);
   M5Cardputer.Display.setRotation(1);
   M5Cardputer.Display.setTextSize(2);
   M5Cardputer.Display.setTextColor(WHITE);
 
-  duk_context *ctx = duk_create_heap_default();
-
-  registerDukBindings(ctx);
+  script = readBootFile();
 
   duk_push_string(ctx, script.c_str());
   if (duk_peval(ctx) != 0) {
-      printf("eval failed: %s\n", duk_safe_to_string(ctx, -1));
+      printf("boot eval failed: %s\n", duk_safe_to_string(ctx, -1));
   } else {
-      printf("result is: %s\n", duk_safe_to_string(ctx, -1));
+      printf("boot result: %s\n", duk_safe_to_string(ctx, -1));
   }
   duk_pop(ctx);
 
-  duk_destroy_heap(ctx);
-
-  delay(1000);
+  callJsFunction("setup");
 }
 
+void loop() {
+  callJsFunction("loop");
+  delay(10);
+}

@@ -13,7 +13,7 @@ String readBootFile() {
         return mountError;
     }
 
-    File file = SPIFFS.open("/doolittle/boot.js", "r");
+    File file = SPIFFS.open("/boot.js", "r");
     if (!file) {
         Serial.println("No boot.js file");
         return fileError;
@@ -40,7 +40,7 @@ void loadConfigFile(String &ssid, String &password) {
         return;
     }
 
-    File file = SPIFFS.open("/doolittle/config.txt", "r");
+    File file = SPIFFS.open("/config.txt", "r");
     if (!file) {
         Serial.println(fileError);
         return;
