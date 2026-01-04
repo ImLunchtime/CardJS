@@ -16,6 +16,90 @@
 #include "config.h"
 #include "fs_utils.h"
 #include "native_menu.h"
+#include "audio_player.h"
+
+struct JsAudioPlayer {
+  int volumePercent;
+  int playMode;
+};
+
+static JsAudioPlayer *get_audio_player(duk_context *ctx) {
+  duk_push_this(ctx);
+  duk_get_prop_string(ctx, -1, "\xffptr");
+  JsAudioPlayer *player =
+      static_cast<JsAudioPlayer *>(duk_get_pointer(ctx, -1));
+  duk_pop_2(ctx);
+  return player;
+}
+
+static duk_ret_t native_AudioPlayer_playSD(duk_context *ctx) {
+  JsAudioPlayer *player = get_audio_player(ctx);
+  if (!player) {
+    return 0;
+  }
+  const char *path = duk_to_string(ctx, 0);
+  audioPlayerPlaySD(path, player->playMode);
+  return 0;
+}
+
+static duk_ret_t native_AudioPlayer_setVolume(duk_context *ctx) {
+  JsAudioPlayer *player = get_audio_player(ctx);
+  if (!player) {
+    return 0;
+  }
+  int v = duk_to_int(ctx, 0);
+  if (v < 0) {
+    v = 0;
+  }
+  if (v > 100) {
+    v = 100;
+  }
+  player->volumePercent = v;
+  audioPlayerSetVolume(v);
+  return 0;
+}
+
+static duk_ret_t native_AudioPlayer_playMode(duk_context *ctx) {
+  JsAudioPlayer *player = get_audio_player(ctx);
+  if (!player) {
+    return 0;
+  }
+  int mode = duk_to_int(ctx, 0);
+  if (mode < 0) {
+    mode = 0;
+  }
+  player->playMode = mode;
+  return 0;
+}
+
+static duk_ret_t native_AudioPlayer_stop(duk_context *ctx) {
+  JsAudioPlayer *player = get_audio_player(ctx);
+  if (!player) {
+    return 0;
+  }
+  audioPlayerStop();
+  return 0;
+}
+
+static duk_ret_t native_AudioPlayer(duk_context *ctx) {
+  duk_idx_t obj_idx = duk_push_object(ctx);
+  JsAudioPlayer *player = new JsAudioPlayer();
+  player->volumePercent = 50;
+  player->playMode = 0;
+  duk_push_pointer(ctx, player);
+  duk_put_prop_string(ctx, obj_idx, "\xffptr");
+
+  duk_push_c_function(ctx, native_AudioPlayer_playSD, 1);
+  duk_put_prop_string(ctx, obj_idx, "playSD");
+  duk_push_c_function(ctx, native_AudioPlayer_setVolume, 1);
+  duk_put_prop_string(ctx, obj_idx, "setVolume");
+  duk_push_c_function(ctx, native_AudioPlayer_playMode, 1);
+  duk_put_prop_string(ctx, obj_idx, "playMode");
+  duk_push_c_function(ctx, native_AudioPlayer_stop, 0);
+  duk_put_prop_string(ctx, obj_idx, "stop");
+
+  return 1;
+}
 
 static NativeMenu *get_native_menu(duk_context *ctx) {
   duk_push_this(ctx);
@@ -321,7 +405,15 @@ static duk_ret_t native_setTextColor(duk_context *ctx) {
 }
 
 static duk_ret_t native_setTextSize(duk_context *ctx) {
-  M5Cardputer.Display.setTextSize(duk_to_number(ctx, 0));
+  if (duk_to_number(ctx, 0) == 1) {
+    M5Cardputer.Display.setTextSize(1);
+    M5Cardputer.Display.setFont(&fonts::efontCN_10);
+  }else if (duk_to_number(ctx, 0) == 2) {
+    M5Cardputer.Display.setTextSize(1);
+    M5Cardputer.Display.setFont(&fonts::efontCN_16);
+  }else{
+    M5Cardputer.Display.setTextSize(duk_to_number(ctx, 0));
+  }
   return 0;
 }
 
@@ -737,6 +829,9 @@ void registerDukBindings(duk_context *ctx) {
   duk_put_global_string(ctx, "renameFileSpiffs");
   duk_push_c_function(ctx, native_renameFileSD, 2);
   duk_put_global_string(ctx, "renameFileSD");
+
+  duk_push_c_function(ctx, native_AudioPlayer, 0);
+  duk_put_global_string(ctx, "AudioPlayer");
 
   duk_push_c_function(ctx, native_Menu, 0);
   duk_put_global_string(ctx, "Menu");

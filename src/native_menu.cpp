@@ -178,7 +178,8 @@ void NativeMenu::drawItem(const NativeMenuItem &item, int index, int y, int item
 
   uint16_t textCol = selected ? textSelectedColor : textColor;
   M5Cardputer.Display.setTextColor(textCol);
-  M5Cardputer.Display.setTextSize(2);
+  M5Cardputer.Display.setTextSize(1);
+  M5Cardputer.Display.setFont(&efontCN_16);
 
   int labelX = 8;
   int textY = y + itemHeight / 2 - 8;
