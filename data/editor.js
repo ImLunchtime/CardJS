@@ -10,8 +10,9 @@ var cursorCol = 0;
 var topLine = 0;
 var lineHeight = 16;
 var charWidth = 12;
-var textStartY = 24;
+var textStartY = 30;
 var marginX = 4;
+var firstVisibleCol = 0;
 
 function loadSpiffsJsFiles() {
     files = [];
@@ -85,6 +86,20 @@ function ensureCursorVisible() {
     if (cursorCol > line.length) {
         cursorCol = line.length;
     }
+    var visibleWidth = width() - marginX;
+    var maxCols = Math.floor(visibleWidth / charWidth);
+    if (maxCols < 1) {
+        maxCols = 1;
+    }
+    if (cursorCol < firstVisibleCol) {
+        firstVisibleCol = cursorCol;
+    }
+    if (cursorCol >= firstVisibleCol + maxCols) {
+        firstVisibleCol = cursorCol - maxCols + 1;
+    }
+    if (firstVisibleCol < 0) {
+        firstVisibleCol = 0;
+    }
 }
 
 function drawEditorScreen() {
@@ -98,8 +113,15 @@ function drawEditorScreen() {
         nameDisplay = nameDisplay.substring(1);
     }
     drawString(nameDisplay, marginX, 4);
-    drawString("Fn+Enter:Save", marginX, 4 + lineHeight);
+    setTextSize(1);
+    drawString("[Fn+Enter]Save", marginX, 6 + lineHeight);
+    setTextSize(2);
     var maxLines = Math.floor((height() - textStartY) / lineHeight);
+    var visibleWidth = width() - marginX;
+    var maxCols = Math.floor(visibleWidth / charWidth);
+    if (maxCols < 1) {
+        maxCols = 1;
+    }
     var y = textStartY;
     for (var i = 0; i < maxLines; i++) {
         var idx = topLine + i;
@@ -107,12 +129,20 @@ function drawEditorScreen() {
             break;
         }
         var text = lines[idx];
-        drawString(text, marginX, y);
+        var startCol = firstVisibleCol;
+        if (startCol < 0) {
+            startCol = 0;
+        }
+        if (startCol > text.length) {
+            startCol = text.length;
+        }
+        var visible = text.substring(startCol, startCol + maxCols);
+        drawString(visible, marginX, y);
         y += lineHeight;
     }
     var cursorScreenRow = cursorRow - topLine;
     if (cursorScreenRow >= 0 && cursorScreenRow < maxLines) {
-        var cx = marginX + cursorCol * charWidth;
+        var cx = marginX + (cursorCol - firstVisibleCol) * charWidth;
         var cy = textStartY + cursorScreenRow * lineHeight;
         drawFillRect(cx, cy, 2, lineHeight, fg);
     }
@@ -162,6 +192,7 @@ function loadFileToEditor(path) {
     cursorRow = 0;
     cursorCol = 0;
     topLine = 0;
+    firstVisibleCol = 0;
     ensureCursorVisible();
     drawEditorScreen();
 }
@@ -335,6 +366,7 @@ function handleNameInput(state) {
         cursorRow = 0;
         cursorCol = 0;
         topLine = 0;
+        firstVisibleCol = 0;
         drawEditorScreen();
         return;
     }
