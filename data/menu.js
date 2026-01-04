@@ -84,7 +84,7 @@ function loop() {
             selectedIndex = (selectedIndex + 1) % files.length;
             changed = true;
         } else if (state.enter) {
-            changeScriptSpiffs(files[selectedIndex]);
+            changeScriptSpiffs("/" + files[selectedIndex]);
             lastKeyTime = currentTime;
             return;
         }
