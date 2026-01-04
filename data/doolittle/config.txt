@@ -1,0 +1,3 @@
+SSID: wifiname
+PASSWORD: wifipassword
+
