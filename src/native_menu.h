@@ -29,7 +29,7 @@ struct NativeMenuItem {
   void *callbackFunc;
 };
 
-class NativeMenu {
+ class NativeMenu {
  public:
   NativeMenu();
   void addButton(const char *label, void *callbackFunc);
@@ -44,6 +44,7 @@ class NativeMenu {
   std::vector<NativeMenuItem> items;
   int selectedIndex;
   int scrollOffset;
+  bool needsInitialDraw;
   bool editing;
   int editingIndex;
   bool editingIsNumber;
@@ -60,4 +61,3 @@ class NativeMenu {
   void draw();
   void drawItem(const NativeMenuItem &item, int index, int y, int itemHeight, bool selected);
 };
-

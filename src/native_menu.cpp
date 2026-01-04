@@ -6,6 +6,7 @@
 NativeMenu::NativeMenu()
     : selectedIndex(0),
       scrollOffset(0),
+      needsInitialDraw(true),
       editing(false),
       editingIndex(-1),
       editingIsNumber(false),
@@ -212,10 +213,16 @@ void NativeMenu::draw() {
 void NativeMenu::refresh() {
   ensureSelectionVisible();
   draw();
+  needsInitialDraw = false;
 }
 
 void NativeMenu::update(duk_context *ctx) {
   if (items.empty()) {
+    return;
+  }
+
+  if (needsInitialDraw) {
+    refresh();
     return;
   }
 
@@ -389,4 +396,3 @@ void NativeMenu::update(duk_context *ctx) {
     draw();
   }
 }
-
