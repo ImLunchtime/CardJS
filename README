@@ -1,3 +1,8 @@
 # CardJS
 An *OS* for Cardputer(-ADV) that works with JavaScript.
 Based on Arduino-duktape and https://github.com/justinknight93/Doolittle.
+
+## How to use?
+Run `pio run -t upload` and then `pio run -t uploadfs`. If you forgot to upload the filesystem, the OS won't start.
+
+## No API docs yet
