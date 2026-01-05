@@ -73,7 +73,7 @@ function loop() {
                     player.stop();
                 }
             } else if (k === "-") {
-                currentVolume -= 10;
+                currentVolume -= 5;
                 if (currentVolume < 0) {
                     currentVolume = 0;
                 }
@@ -84,7 +84,7 @@ function loop() {
                     drawTrackScreen(tracks[currentTrackIndex].label);
                 }
             } else if (k === "=") {
-                currentVolume += 10;
+                currentVolume += 5;
                 if (currentVolume > 100) {
                     currentVolume = 100;
                 }
